@@ -1,0 +1,578 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>小游戏</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: #fff; color: #111827; }
+  body {
+    font: 15px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+          "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    -webkit-font-smoothing: antialiased;
+    min-height: 100vh; display: flex; flex-direction: column;
+  }
+
+  .topbar {
+    height: 60px; flex: 0 0 60px; display: flex; align-items: center; gap: 28px;
+    padding: 0 28px; border-bottom: 1px solid #eef0f3; background: #fff;
+  }
+  .brand { font-weight: 600; font-size: 15px; letter-spacing: -0.01em; }
+  .tabs { display: flex; gap: 6px; }
+  .tab {
+    appearance: none; border: 0; background: transparent; font: inherit;
+    color: #6b7280; cursor: pointer; padding: 7px 14px; border-radius: 8px;
+    transition: background .15s, color .15s;
+  }
+  .tab:hover { background: #f6f8fa; color: #111827; }
+  .tab.active { background: #f0f7fd; color: #0d6ea8; font-weight: 550; }
+
+  .userbar { margin-left: auto; display: flex; align-items: center; gap: 10px; font-size: 14px; }
+  .who { color: #6b7280; max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .linkbtn {
+    appearance: none; border: 0; background: transparent; font: inherit;
+    color: #0d6ea8; cursor: pointer; padding: 6px 8px; border-radius: 7px;
+  }
+  .linkbtn:hover { background: #f0f7fd; }
+
+  main { flex: 1; display: flex; flex-direction: column; }
+  .pane { display: none; flex: 1; padding: 32px 28px 26px; }
+  .pane.active { display: flex; flex-direction: column; }
+  .pane-inner { width: 100%; max-width: 980px; margin: 0 auto; display: flex; flex-direction: column; flex: 1; }
+
+  /* ---------- 游戏列表（与 file 站下载页一致） ---------- */
+  .fm {
+    border: 1px solid #eef0f3; border-radius: 12px; overflow: hidden;
+    flex: 1; min-height: 240px; display: flex; flex-direction: column; background: #fff;
+  }
+  .fm-head {
+    display: flex; align-items: center; gap: 12px;
+    padding: 11px 16px; border-bottom: 1px solid #eef0f3;
+    font-size: 13px; color: #9aa4b2; background: #fcfdff;
+  }
+  .fm-head .c-n { flex: 1; }
+  .fm-head .c-u { width: 120px; }
+  .fm-head .c-s { width: 96px; text-align: right; }
+  .fm-head .c-t { width: 142px; text-align: right; }
+  .fm-list { flex: 1; overflow-y: auto; }
+  .fm-empty {
+    flex: 1; display: flex; align-items: center; justify-content: center;
+    color: #b9c0c8; font-size: 14px; padding: 40px 12px; text-align: center;
+  }
+  .item {
+    display: flex; align-items: center; gap: 12px;
+    padding: 11px 16px; cursor: pointer; border-bottom: 1px solid #f6f8fa;
+    transition: background .12s; user-select: none;
+  }
+  .item:hover { background: #fafcfe; }
+  .item.sel { background: #f0f7fd; }
+  .item.sel .nm { color: #0d6ea8; }
+  .item .ico {
+    width: 16px; height: 16px; flex: 0 0 16px; overflow: hidden;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .item .ico img {
+    width: 16px; height: 16px; object-fit: contain;
+    image-rendering: pixelated; image-rendering: crisp-edges;
+  }
+  .item .nm {
+    flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    font-size: 15px; color: #111827;
+  }
+  .item .c-u { width: 120px; color: #9aa4b2; font-size: 13px;
+               overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .item .c-s { width: 96px; text-align: right; color: #9aa4b2; font-size: 13px; }
+  .item .c-t { width: 142px; text-align: right; color: #b9c0c8; font-size: 13px; }
+
+  /* ---------- 上传 ---------- */
+  .drop {
+    border: 2px dashed #d9dee5; border-radius: 16px; min-height: 260px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 10px; text-align: center; cursor: pointer; padding: 28px;
+    transition: border-color .15s, background .15s; background: #fff;
+  }
+  .drop:hover { border-color: #b9d9ef; background: #fcfdff; }
+  .drop.hover { border-color: #7cc4ea; background: #f5fbff; }
+  .drop .icon { font-size: 28px; color: #9aa4b2; line-height: 1; }
+  .drop .title { font-size: 15.5px; }
+  .drop .hint { font-size: 13px; color: #9aa4b2; line-height: 1.7; }
+
+  .files { margin-top: 16px; display: none; }
+  .files.show { display: block; }
+  .frow {
+    display: flex; align-items: center; gap: 10px; font-size: 13.5px;
+    padding: 7px 12px; border: 1px solid #f1f3f6; border-radius: 9px; margin-bottom: 6px;
+    color: #4b5563;
+  }
+  .frow .fn { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .frow .fs { color: #9aa4b2; }
+  .frow.warn { border-color: #fde2e2; background: #fffafa; color: #b91c1c; }
+  .summary { font-size: 13.5px; color: #6b7280; margin-top: 4px; }
+  .summary b { color: #111827; font-weight: 550; }
+  .summary .bad { color: #dc2626; }
+
+  .bar { margin-top: 20px; height: 44px; display: flex; align-items: center; justify-content: center; }
+  .btn {
+    appearance: none; border: 0; border-radius: 10px; font: inherit; font-weight: 550;
+    cursor: pointer; padding: 12px 40px; min-width: 168px;
+    transition: background .15s, color .15s;
+  }
+  .btn.primary { background: #bfe3f7; color: #0a4f75; }
+  .btn.primary:hover:not(:disabled) { background: #a9d8f2; }
+  .btn:disabled { background: #f1f3f5; color: #b9c0c8; cursor: not-allowed; }
+
+  .progress { margin-top: 14px; display: none; }
+  .progress.show { display: block; }
+  .track { height: 6px; border-radius: 3px; background: #eef2f6; overflow: hidden; }
+  .fill { height: 100%; width: 0; background: #7cc4ea; transition: width .2s; }
+  .progress .txt { margin-top: 8px; font-size: 13px; color: #9aa4b2; text-align: center; }
+
+  /* ---------- 游戏窗口 ---------- */
+  .overlay {
+    position: fixed; inset: 0; background: rgba(15, 17, 21, .96);
+    display: none; flex-direction: column; z-index: 30;
+  }
+  .overlay.show { display: flex; }
+  .ovbar {
+    height: 48px; flex: 0 0 48px; display: flex; align-items: center; gap: 12px;
+    padding: 0 16px; color: #e5e7eb; font-size: 14px;
+    border-bottom: 1px solid rgba(255,255,255,.08);
+  }
+  .ovbar .ovname { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ovbar button {
+    appearance: none; border: 0; background: rgba(255,255,255,.1); color: #e5e7eb;
+    font: inherit; padding: 6px 14px; border-radius: 8px; cursor: pointer;
+  }
+  .ovbar button:hover { background: rgba(255,255,255,.18); }
+  .overlay iframe { flex: 1; width: 100%; border: 0; background: #0f1115; }
+
+  .mask {
+    position: fixed; inset: 0; background: rgba(17, 24, 39, .28);
+    display: none; align-items: center; justify-content: center; padding: 20px; z-index: 40;
+  }
+  .mask.show { display: flex; }
+  .dialog {
+    width: 100%; max-width: 360px; background: #fff; border-radius: 16px; padding: 26px;
+    box-shadow: 0 18px 50px rgba(15, 23, 42, .16);
+  }
+  .dialog h2 { margin: 0 0 4px; font-size: 18px; }
+  .dialog .sub { margin: 0 0 18px; color: #9aa4b2; font-size: 13px; }
+  .field { margin-bottom: 12px; }
+  .field input {
+    width: 100%; padding: 11px 13px; font: inherit; color: #111827;
+    border: 1px solid #e3e8ee; border-radius: 10px; outline: none;
+  }
+  .field input:focus { border-color: #bfe3f7; box-shadow: 0 0 0 3px #f0f7fd; }
+  .dialog .actions { display: flex; gap: 10px; margin-top: 18px; }
+  .dialog .actions .btn { flex: 1; min-width: 0; padding: 11px 0; }
+  .btn.ghost { background: #f6f8fa; color: #6b7280; }
+  .err { color: #dc2626; font-size: 13px; min-height: 18px; margin-top: 2px; }
+
+  .toast {
+    position: fixed; left: 50%; bottom: 26px; transform: translateX(-50%) translateY(12px);
+    background: #111827; color: #fff; font-size: 14px; padding: 10px 18px; border-radius: 10px;
+    opacity: 0; pointer-events: none; transition: opacity .2s, transform .2s;
+    max-width: 88vw; text-align: center; z-index: 50;
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  @media (max-width: 620px) {
+    .topbar { gap: 12px; padding: 0 14px; }
+    .pane { padding: 20px 14px; }
+    .btn { width: 100%; }
+    .grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+  }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="brand">小游戏</div>
+  <nav class="tabs">
+    <button class="tab active" data-tab="games">游戏</button>
+    <button class="tab" data-tab="upload">上传</button>
+  </nav>
+  <div class="userbar">
+    <span class="who" id="who">未登录</span>
+    <button class="linkbtn" id="auth-btn">登录</button>
+  </div>
+</div>
+
+<main>
+  <!-- 游戏列表 -->
+  <section class="pane active" id="pane-games">
+    <div class="pane-inner">
+      <div class="fm">
+        <div class="fm-head">
+          <span class="c-n">游戏</span>
+          <span class="c-u">上传者</span>
+          <span class="c-s">大小</span>
+          <span class="c-t">上传时间</span>
+        </div>
+        <div class="fm-list" id="grid">
+          <div class="fm-empty">加载中…</div>
+        </div>
+      </div>
+      <div class="bar">
+        <button class="btn primary" id="btn-open" disabled>打开</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- 上传 -->
+  <section class="pane" id="pane-upload">
+    <div class="pane-inner">
+      <div class="drop" id="drop">
+        <div class="icon">▣</div>
+        <div class="title">点击选择游戏文件夹，或把文件夹拖到这里</div>
+        <div class="hint">
+          必须包含 <b>game.js</b>，其余资产可选 · 单个游戏不超过 8 MB<br>
+          <b>icon.png</b> 会作为封面显示在列表里
+        </div>
+      </div>
+      <input type="file" id="picker" webkitdirectory directory multiple hidden>
+
+      <div class="files" id="files"></div>
+      <div class="summary" id="summary"></div>
+
+      <div class="progress" id="progress">
+        <div class="track"><div class="fill" id="fill"></div></div>
+        <div class="txt" id="ptxt">0%</div>
+      </div>
+
+      <div class="bar">
+        <button class="btn primary" id="btn-upload" disabled>确认上传</button>
+      </div>
+    </div>
+  </section>
+</main>
+
+<!-- 游戏窗口 -->
+<div class="overlay" id="overlay">
+  <div class="ovbar">
+    <span class="ovname" id="ovname"></span>
+    <button id="ov-close">关闭</button>
+  </div>
+  <iframe id="ov-frame" sandbox="allow-scripts allow-pointer-lock" referrerpolicy="no-referrer"></iframe>
+</div>
+
+<!-- 登录框 -->
+<div class="mask" id="mask">
+  <div class="dialog">
+    <h2>登录</h2>
+    <p class="sub">用 foracy.site 的账号，没有可以先注册。</p>
+    <div class="field"><input id="f-user" placeholder="用户名" autocomplete="username"></div>
+    <div class="field"><input id="f-pass" type="password" placeholder="密码" autocomplete="current-password"></div>
+    <div class="err" id="f-err"></div>
+    <div class="actions">
+      <button class="btn ghost" id="dlg-cancel">取消</button>
+      <button class="btn primary" id="dlg-login">登录</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="./api-shim.js"></script>
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const MEG = 1024 * 1024;
+  const fmt = (n) => n < 1024 ? n + ' B'
+    : n < MEG ? (n / 1024).toFixed(1) + ' KB'
+    : (n / MEG).toFixed(2) + ' MB';
+  const fmtTime = (ts) => {
+    const d = new Date(ts * 1000), now = new Date(), p = (x) => String(x).padStart(2, '0');
+    return d.toDateString() === now.toDateString()
+      ? `今天 ${p(d.getHours())}:${p(d.getMinutes())}`
+      : `${d.getMonth() + 1}月${d.getDate()}日`;
+  };
+  const toast = (msg) => {
+    const t = $('toast'); t.textContent = msg; t.classList.add('show');
+    clearTimeout(t._timer); t._timer = setTimeout(() => t.classList.remove('show'), 3000);
+  };
+
+  // 默认图标：Windows 资源管理器那种文件夹（16×16 内联 SVG）
+  const FOLDER_ICON = 'data:image/svg+xml;utf8,' + encodeURIComponent(
+    '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" shape-rendering="crispEdges">' +
+    '<path d="M1 3.6c0-.5.4-.9.9-.9h3.4l1.2 1.3h6.6c.5 0 .9.4.9.9v1.2H1V3.6z" fill="#E8A33D"/>' +
+    '<path d="M1 5.4h14v7.1c0 .5-.4.9-.9.9H1.9c-.5 0-.9-.4-.9-.9V5.4z" fill="#FFC94A"/>' +
+    '<path d="M1 5.4h14v1.1H1z" fill="#FFDA6B"/>' +
+    '<path d="M1 5.4h14v7.1c0 .5-.4.9-.9.9H1.9c-.5 0-.9-.4-.9-.9V5.4z" fill="none" stroke="#C98B2B" stroke-width=".7"/>' +
+    '</svg>');
+
+  let user = null, games = [], selected = null;
+
+  /* ---------- 登录 ---------- */
+  const paintAuth = () => {
+    $('who').textContent = user ? user.username : '未登录';
+    $('auth-btn').textContent = user ? '退出' : '登录';
+  };
+
+  $('auth-btn').addEventListener('click', async () => {
+    if (user) {
+      await fetch('/api/auth/logout', { method: 'POST' });
+      user = null; paintAuth(); toast('已退出');
+      return;
+    }
+    $('f-err').textContent = '';
+    $('mask').classList.add('show');
+    setTimeout(() => $('f-user').focus(), 50);
+  });
+  $('dlg-cancel').addEventListener('click', () => $('mask').classList.remove('show'));
+  $('mask').addEventListener('click', (e) => { if (e.target === $('mask')) $('mask').classList.remove('show'); });
+
+  const doLogin = async () => {
+    const username = $('f-user').value.trim(), password = $('f-pass').value;
+    if (!username || !password) { $('f-err').textContent = '用户名和密码都要填'; return; }
+    $('dlg-login').disabled = true;
+    try {
+      const r = await fetch('/api/auth/login', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password }),
+      });
+      const j = await r.json().catch(() => ({}));
+      if (r.ok && (j.success || j.user)) {
+        $('mask').classList.remove('show'); $('f-pass').value = '';
+        await loadGames();
+        toast('已登录：' + (user ? user.username : username));
+      } else { $('f-err').textContent = j.message || '登录失败'; }
+    } catch { $('f-err').textContent = '网络错误'; }
+    finally { $('dlg-login').disabled = false; }
+  };
+  $('dlg-login').addEventListener('click', doLogin);
+  ['f-user', 'f-pass'].forEach((id) =>
+    $(id).addEventListener('keydown', (e) => { if (e.key === 'Enter') doLogin(); }));
+
+  /* ---------- 列表 ---------- */
+  const renderGames = () => {
+    const list = $('grid');
+    list.innerHTML = '';
+    if (!games.length) {
+      list.innerHTML = '<div class="fm-empty">还没有游戏，去「上传」传一个文件夹</div>';
+      $('btn-open').disabled = true;
+      return;
+    }
+    games.forEach((g) => {
+      const row = document.createElement('div');
+      row.className = 'item' + (selected === g.id ? ' sel' : '');
+      const cover = g.hasIcon ? `/api/icon/${g.id}` : FOLDER_ICON;
+      row.innerHTML = `<span class="ico"><img src="${cover}" alt=""></span>
+                       <span class="nm"></span>
+                       <span class="c-u"></span>
+                       <span class="c-s">${g.sizeText}</span>
+                       <span class="c-t">${fmtTime(g.mtime)}</span>`;
+      row.querySelector('.nm').textContent = g.name;
+      row.querySelector('.nm').title = g.name;
+      row.querySelector('.c-u').textContent = g.owner || '—';
+      row.addEventListener('click', () => {
+        selected = selected === g.id ? null : g.id;
+        [...list.children].forEach((c) => c.classList.remove('sel'));
+        if (selected) row.classList.add('sel');
+        $('btn-open').disabled = !selected;
+      });
+      row.addEventListener('dblclick', () => openGame(g));
+      list.appendChild(row);
+    });
+    $('btn-open').disabled = !selected;
+  };
+
+  const loadGames = async () => {
+    try {
+      const r = await fetch('/api/games', { cache: 'no-store' });
+      const j = await r.json();
+      games = j.games || [];
+      user = j.user || null;
+      paintAuth(); renderGames();
+    } catch {
+      $('grid').innerHTML = '<div class="fm-empty">读取失败，稍后重试</div>';
+    }
+  };
+
+  $('btn-open').addEventListener('click', () => {
+    const g = games.find((x) => x.id === selected);
+    if (g) openGame(g);
+  });
+
+  /* ---------- 运行游戏 ---------- */
+  const openGame = (g) => {
+    $('ovname').textContent = g.name;
+    $('ov-frame').src = `/games/${g.id}/${g.entry || 'index.html'}`;
+    $('overlay').classList.add('show');
+  };
+  $('ov-close').addEventListener('click', () => {
+    $('overlay').classList.remove('show');
+    $('ov-frame').src = 'about:blank';
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && $('overlay').classList.contains('show')) {
+      $('overlay').classList.remove('show');
+      $('ov-frame').src = 'about:blank';
+    }
+  });
+
+  /* ---------- 标签 ---------- */
+  document.querySelectorAll('.tab').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.tab').forEach((b) => b.classList.toggle('active', b === btn));
+      document.querySelectorAll('.pane').forEach((p) =>
+        p.classList.toggle('active', p.id === 'pane-' + btn.dataset.tab));
+      if (btn.dataset.tab === 'games') loadGames();
+    });
+  });
+
+  /* ---------- 上传 ---------- */
+  let picked = [];   // {file, rel}
+  let pickedFolder = '';
+
+  const renderPicked = () => {
+    const box = $('files'), sum = $('summary');
+    box.innerHTML = '';
+    const total = picked.reduce((a, x) => a + x.file.size, 0);
+    const hasJs = picked.some((x) => x.rel === 'game.js' || x.rel.endsWith('/game.js'));
+    const top = pickedFolder || '（未命名）';
+
+    const show = picked.slice(0, 40);
+    show.forEach((x) => {
+      const row = document.createElement('div');
+      row.className = 'frow';
+      row.innerHTML = `<span class="fn"></span><span class="fs">${fmt(x.file.size)}</span>`;
+      row.querySelector('.fn').textContent = x.rel;
+      box.appendChild(row);
+    });
+    if (picked.length > show.length) {
+      const more = document.createElement('div');
+      more.className = 'frow';
+      more.textContent = `…… 还有 ${picked.length - show.length} 个文件`;
+      box.appendChild(more);
+    }
+    box.classList.toggle('show', picked.length > 0);
+
+    if (!picked.length) { sum.innerHTML = ''; $('btn-upload').disabled = true; return; }
+    const bad = [];
+    if (!hasJs) bad.push('缺少 game.js');
+    if (total > 8 * MEG) bad.push('超过 8 MB');
+    sum.innerHTML = `文件夹「<b>${top}</b>」 · ${picked.length} 个文件 · 共 <b>${fmt(total)}</b>` +
+      (bad.length ? ` · <span class="bad">${bad.join('，')}</span>` : '');
+    $('btn-upload').disabled = bad.length > 0;
+  };
+
+  const addFiles = (list) => {
+    picked = [];
+    pickedFolder = '';
+    for (const item of list) {
+      const f = item.file || item;
+      const rel = (item.rel || f.webkitRelativePath || f.name || '').replace(/^\/+/, '');
+      picked.push({ file: f, rel });
+    }
+    if (!picked.length) { renderPicked(); return; }
+
+    // 浏览器给的相对路径是「文件夹/子路径/文件名」，记下文件夹名再剥掉这一层
+    const parts = picked.map((x) => x.rel.split('/'));
+    const first = parts[0][0];
+    const hasDir = parts.every((p) => p.length > 1 && p[0] === first);
+    if (hasDir) {
+      pickedFolder = first;
+      picked = picked.map((x, i) => ({ file: x.file, rel: parts[i].slice(1).join('/') }));
+    } else {
+      pickedFolder = '';
+      picked = picked.map((x) => ({ file: x.file, rel: x.rel.split('/').pop() }));
+    }
+    renderPicked();
+  };
+
+  const drop = $('drop');
+  drop.addEventListener('click', () => $('picker').click());
+  $('picker').addEventListener('change', (e) => {
+    addFiles([...e.target.files].map((f) => ({ file: f, rel: f.webkitRelativePath || f.name })));
+    e.target.value = '';
+  });
+
+  ['dragenter', 'dragover'].forEach((ev) =>
+    drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.add('hover'); }));
+  ['dragleave', 'drop'].forEach((ev) =>
+    drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.remove('hover'); }));
+
+  drop.addEventListener('drop', async (e) => {
+    e.preventDefault();
+    const items = [...(e.dataTransfer.items || [])];
+    if (!items.length) return;
+    const files = [];
+    const walk = async (entry, path) => {
+      if (entry.isFile) {
+        const f = await new Promise((res, rej) => entry.file(res, rej));
+        files.push({ file: f, rel: (path ? path + '/' : '') + entry.name });
+      } else if (entry.isDirectory) {
+        const reader = entry.createReader();
+        const entries = await new Promise((res) => {
+          const all = [];
+          const read = () => reader.readEntries((batch) => {
+            if (!batch.length) return res(all);
+            all.push(...batch); read();
+          }, () => res(all));
+          read();
+        });
+        for (const en of entries) await walk(en, (path ? path + '/' : '') + entry.name);
+      }
+    };
+    for (const it of items) {
+      const entry = it.webkitGetAsEntry && it.webkitGetAsEntry();
+      if (entry) await walk(entry, '');
+    }
+    if (files.length) addFiles(files);
+  });
+  window.addEventListener('dragover', (e) => e.preventDefault());
+  window.addEventListener('drop', (e) => e.preventDefault());
+
+  $('btn-upload').addEventListener('click', () => {
+    if (!user) {
+      $('mask').classList.add('show');
+      setTimeout(() => $('f-user').focus(), 50);
+      return;
+    }
+    if (!picked.length) return;
+
+    const fd = new FormData();
+    fd.append('name', pickedFolder || '未命名游戏');
+    picked.forEach((x) => fd.append('files', x.file, x.rel));
+
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', '/api/games');
+    $('progress').classList.add('show');
+    $('btn-upload').disabled = true;
+
+    xhr.upload.onprogress = (e) => {
+      if (!e.lengthComputable) return;
+      const pct = Math.round((e.loaded / e.total) * 100);
+      $('fill').style.width = pct + '%'; $('ptxt').textContent = pct + '%';
+    };
+    xhr.onload = () => {
+      $('progress').classList.remove('show'); $('fill').style.width = '0';
+      $('btn-upload').disabled = false;
+      let res = {};
+      try { res = JSON.parse(xhr.responseText || '{}'); } catch {}
+      if (xhr.status === 200 && res.ok) {
+        toast('上传成功：' + res.name);
+        picked = []; renderPicked(); $('drop').classList.remove('hover');
+        document.querySelector('.tab[data-tab="games"]').click();
+      } else if (xhr.status === 401) {
+        user = null; paintAuth(); $('mask').classList.add('show');
+        toast('登录已过期，请重新登录');
+      } else {
+        toast(res.error || ('上传失败：' + xhr.status));
+      }
+    };
+    xhr.onerror = () => {
+      $('progress').classList.remove('show');
+      $('btn-upload').disabled = false;
+      toast('上传失败：网络错误');
+    };
+    xhr.send(fd);
+  });
+
+  loadGames();
+})();
+</script>
+</body>
+</html>

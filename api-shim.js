@@ -14,12 +14,29 @@
     } catch (e) { return null; }
   }
 
+  var SNAPSHOT_BASE = 'https://misakiforacy.github.io/myblog/data/';
+  function snapshotFor(url) {
+    if (!url) return null;
+    if (url.indexOf(ORIGIN + '/api/games') === 0) return SNAPSHOT_BASE + 'games.json';
+    return null;
+  }
+
   var rawFetch = window.fetch;
   if (rawFetch) {
     window.fetch = function (input, init) {
-      if (typeof input === 'string') { var m = mapUrl(input); if (m) input = m; }
-      else if (input && input.url) { var n = mapUrl(input.url); if (n) input = new Request(n, input); }
-      return rawFetch.call(window, input, init);
+      var original = typeof input === 'string' ? input : (input && input.url);
+      var mapped = mapUrl(original);
+      if (!mapped) return rawFetch.call(window, input, init);
+      return rawFetch.call(window, mapped, init).then(function (res) {
+        if (res && res.ok) return res;
+        var snap = snapshotFor(mapped);
+        if (!snap) return res;
+        return rawFetch.call(window, snap, { cache: 'no-store' });
+      }).catch(function () {
+        var snap = snapshotFor(mapped);
+        if (!snap) throw new Error('network');
+        return rawFetch.call(window, snap, { cache: 'no-store' });
+      });
     };
   }
 

@@ -48,4 +48,24 @@
     }
     return rawSetAttr.call(this, name, value);
   };
+
+  // <img src="/api/icon/..."> 这类直接写 src 的也要改写
+  var imgDesc = Object.getOwnPropertyDescriptor(HTMLImageElement.prototype, 'src');
+  if (imgDesc && imgDesc.set) {
+    Object.defineProperty(HTMLImageElement.prototype, 'src', {
+      configurable: true,
+      get: imgDesc.get,
+      set: function (v) {
+        var m = mapUrl(v);
+        imgDesc.set.call(this, m || v);
+      }
+    });
+  }
+  var rawSetAttr2 = Element.prototype.setAttribute;
+  Element.prototype.setAttribute = function (name, value) {
+    if (name === 'src' && (this instanceof HTMLImageElement || this instanceof HTMLIFrameElement)) {
+      var m = mapUrl(value); if (m) value = m;
+    }
+    return rawSetAttr2.call(this, name, value);
+  };
 })();

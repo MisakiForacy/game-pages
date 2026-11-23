@@ -40,68 +40,54 @@
     };
   }
 
-  var rawOpen = XMLHttpRequest.prototype.open;
-  XMLHttpRequest.prototype.open = function (method, url) {
-    var m = mapUrl(url); if (m) arguments[1] = m;
-    return rawOpen.apply(this, arguments);
+
+  /* XHR 兜底：应用里有地方用 XMLHttpRequest（axios），
+     这里对映射过的接口直接走 fetch 取快照，再模拟出 onload */
+  var NativeXHR = window.XMLHttpRequest;
+  var nativeOpen = NativeXHR.prototype.open;
+  var nativeSend = NativeXHR.prototype.send;
+
+  NativeXHR.prototype.open = function (method, url) {
+    this.__mapped = mapUrl(url);
+    return nativeOpen.apply(this, arguments);
   };
 
-  // 游戏是 iframe 加载的，src 赋值也要重写
-  var desc = Object.getOwnPropertyDescriptor(HTMLIFrameElement.prototype, 'src');
-  if (desc && desc.set) {
-    Object.defineProperty(HTMLIFrameElement.prototype, 'src', {
-      configurable: true,
-      get: desc.get,
-      set: function (v) {
-        var m = mapUrl(v);
-        desc.set.call(this, m || v);
-      }
+  NativeXHR.prototype.send = function (body) {
+    var self = this;
+    var mapped = this.__mapped;
+    if (!mapped) return nativeSend.apply(this, arguments);
+
+    var loadText = function (url) {
+      return window.fetch(url, { cache: 'no-store' }).then(function (r) {
+        return r.text().then(function (t) { return { status: r.status, text: t }; });
+      });
+    };
+    var snapshot = snapshotFor(mapped);
+    var primary = loadText(mapped).then(function (res) {
+      if (res.status >= 200 && res.status < 300) return res;
+      if (!snapshot) return res;
+      return loadText(snapshot);
+    }).catch(function () {
+      if (!snapshot) throw new Error('network');
+      return loadText(snapshot);
     });
-  }
-  var rawSetAttr = Element.prototype.setAttribute;
-  Element.prototype.setAttribute = function (name, value) {
-    if (name === 'src' && this instanceof HTMLIFrameElement) {
-      var m = mapUrl(value); if (m) value = m;
-    }
-    return rawSetAttr.call(this, name, value);
+
+    primary.then(function (res) {
+      Object.defineProperty(self, 'readyState', { value: 4, configurable: true });
+      Object.defineProperty(self, 'status', { value: res.status, configurable: true });
+      Object.defineProperty(self, 'responseText', { value: res.text, configurable: true });
+      Object.defineProperty(self, 'response', { value: res.text, configurable: true });
+      self.getAllResponseHeaders = function () { return 'content-type: application/json\r\n'; };
+      self.getResponseHeader = function (k) {
+        return String(k).toLowerCase() === 'content-type' ? 'application/json' : null;
+      };
+      if (typeof self.onreadystatechange === 'function') self.onreadystatechange();
+      if (typeof self.onload === 'function') self.onload();
+      try { self.dispatchEvent(new Event('load')); } catch (e) {}
+    }).catch(function (err) {
+      if (typeof self.onerror === 'function') self.onerror(err);
+      try { self.dispatchEvent(new Event('error')); } catch (e) {}
+    });
   };
 
-  // <img src="/api/icon/..."> 这类直接写 src 的也要改写
-  var imgDesc = Object.getOwnPropertyDescriptor(HTMLImageElement.prototype, 'src');
-  if (imgDesc && imgDesc.set) {
-    Object.defineProperty(HTMLImageElement.prototype, 'src', {
-      configurable: true,
-      get: imgDesc.get,
-      set: function (v) {
-        var m = mapUrl(v);
-        imgDesc.set.call(this, m || v);
-      }
-    });
-  }
-  var rawSetAttr2 = Element.prototype.setAttribute;
-  Element.prototype.setAttribute = function (name, value) {
-    if (name === 'src' && (this instanceof HTMLImageElement || this instanceof HTMLIFrameElement)) {
-      var m = mapUrl(value); if (m) value = m;
-    }
-    return rawSetAttr2.call(this, name, value);
-  };
-
-  // innerHTML 解析出来的 img/frame 不经过 setter，用 MutationObserver 补一刀
-  function fixNode(root) {
-    if (!root || root.nodeType !== 1) return;
-    var nodes = [];
-    if (root.matches && root.matches('img,iframe')) nodes.push(root);
-    if (root.querySelectorAll) nodes = nodes.concat([].slice.call(root.querySelectorAll('img,iframe')));
-    nodes.forEach(function (el) {
-      var v = el.getAttribute('src');
-      var m = v ? mapUrl(v) : null;
-      if (m) el.setAttribute('src', m);
-    });
-  }
-  new MutationObserver(function (muts) {
-    muts.forEach(function (mu) {
-      [].slice.call(mu.addedNodes).forEach(fixNode);
-    });
-  }).observe(document.documentElement, { childList: true, subtree: true });
-  document.addEventListener('DOMContentLoaded', function () { fixNode(document.body); });
 })();

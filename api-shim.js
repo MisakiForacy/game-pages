@@ -68,4 +68,23 @@
     }
     return rawSetAttr2.call(this, name, value);
   };
+
+  // innerHTML 解析出来的 img/frame 不经过 setter，用 MutationObserver 补一刀
+  function fixNode(root) {
+    if (!root || root.nodeType !== 1) return;
+    var nodes = [];
+    if (root.matches && root.matches('img,iframe')) nodes.push(root);
+    if (root.querySelectorAll) nodes = nodes.concat([].slice.call(root.querySelectorAll('img,iframe')));
+    nodes.forEach(function (el) {
+      var v = el.getAttribute('src');
+      var m = v ? mapUrl(v) : null;
+      if (m) el.setAttribute('src', m);
+    });
+  }
+  new MutationObserver(function (muts) {
+    muts.forEach(function (mu) {
+      [].slice.call(mu.addedNodes).forEach(fixNode);
+    });
+  }).observe(document.documentElement, { childList: true, subtree: true });
+  document.addEventListener('DOMContentLoaded', function () { fixNode(document.body); });
 })();
